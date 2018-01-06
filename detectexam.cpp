@@ -208,6 +208,9 @@ void detectExam(Mat exam)
     destroyAllWindows();
 
     // Calculate intersections of the four lines obtained
+    // as seen in https://en.wikipedia.org/wiki/Line%E2%80%93line_intersection
+    // and https://stackoverflow.com/questions/16524096/how-to-calculate-the-point-of-intersection-between-two-lines
+
     Point left1, left2, right1, right2, bottom1, bottom2, top1, top2;
     Point topLeft, topRight, bottomLeft, bottomRight;
 
@@ -224,16 +227,44 @@ void detectExam(Mat exam)
     bottom2.y = -bottom2.x/tan(bottom[1]) + bottom1.y;
 
     // Left intersections
-    left1.x = 0;
-    left1.y = left[0]/sin(left[1]);
-    left2.x = grid.size().width;
-    left2.y = -left2.x/tan(left[1]) + left1.y;
-    
+    // (they are vertical so we have to check for infinite angle)
+    if(left[1]!=0)
+    {
+        // Calculate intersection points
+        left1.x = 0;
+        left1.y = left[0]/sin(left[1]);
+        left2.x = grid.size().width;
+        left2.y = -left2.x/tan(left[1]) + left1.y;
+    }
+    else
+    {
+        // Infinite angle! Other way of calculate
+        left1.y = 0;        
+        left1.x = left[0]/cos(left[1]);
+        left2.y = grid.size().height;
+        left2.x = left1.x - grid.size().height*tan(left[1]);
+
+    }
+
     // Right intersections
-    right1.x = 0;
-    right1.y = right[0]/sin(right[1]);
-    right2.x = grid.size().width;
-    right2.y = -right2.x/tan(right[1]) + right1.y;
+    // (they are vertical so we have to check for infinite angle)
+    if(right[1]!=0)
+    {
+        // Calculate intersection points
+        right1.x = 0;        
+        right1.y = right[0]/sin(right[1]);
+        right2.x = grid.size().width;    
+        right2.y = -right2.x/tan(right[1]) + right1.y;
+    }
+    else
+    {
+        // Infinite angle! Other way of calculate
+        right1.y = 0;        
+        right1.x = right[0]/cos(right[1]);
+        right2.y = grid.size().height;    
+        right2.x = right1.x - grid.size().height*tan(right[1]);
+
+    }
     
     // Get top points
     double topA = top2.y - top1.y;
