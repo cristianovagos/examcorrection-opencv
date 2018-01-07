@@ -1,5 +1,3 @@
-
-
 // Visual Studio ONLY - Allowing for pre-compiled header files
 
 // This has to be the first #include
@@ -23,60 +21,90 @@
 
 #include "opencv2/imgproc/imgproc.hpp"
 
+//#include "opencv2/text.hpp"
 
-using namespace std;
-using namespace cv;
-
-// If you want to "simplify" code writing, you might want to use:
-
-// using namespace cv;
-
-// using namespace std;
 //GLOBAL VARIABLES
 using namespace cv;
 using namespace std;
+
+#define X 1;
+#define LETTER 2;
+#define QUESTIONN 3;
+
+struct Grid
+{
+	int width;
+	int length;
+	int type;
+};
+
+Mat templateX;
 Mat image;
 Mat finalImg;
 int m;
 Mat frame;
+Point2f src[4];
+char Option[] = {' ', 'A', 'B', 'C', 'D' };
+
 void extractGrid();
-void detectExam(Mat exam);
+bool detectExamManual(Mat exam);
+void detectExamAuto(Mat exam);
+int MatchingMethod(Mat rect);
 void drawLine(Vec2f line, Mat &image, Scalar rgb);
-
-
+void sortCorners(std::vector<cv::Point2f>& corners, cv::Point2f center);
+void onMouse(int event, int x, int y, int, void* param);
 
 int main(int argc, char** argv) {
-	// Open the default camera
-	//VideoCapture cap(0);
+	templateX = imread("template/X.jpg", 0);
 
-	//namedWindow("Exam Correction - CV 2017/18", CV_WINDOW_KEEPRATIO);
-
-	// Check if the capture is working
-	//if (!cap.isOpened())
-	//	return -1;
-	//while(true) {
-	// Get a frame from the camera
+	// False
+	bool useCamera = false;
+	bool detectionAuto = true;
 	
-	//cap >> frame; // get a new frame from camera
+	if(useCamera) {
+		// Open the default camera
+		VideoCapture cap(0);
 
-	frame = imread("exam.jpg", 0);
-
+		// Check if the capture is working
+		if (!cap.isOpened())
+			return -1;
+		
+		// Get a frame from the camera
+		cap >> frame;
+	} else {
+		frame = imread("exam7.jpg", 0);
+	}
+	
 	// Check if we have a frame
-	//if(frame.empty())
-	//    break;
+	if(frame.empty())
+	   return -1;
 	
-	detectExam(frame);
+	// Detection Mode
+	if(detectionAuto) {
+		// Auto
+		detectExamAuto(frame);
+	} else {
+		// Manual
+		if (!detectExamManual(frame))
+			return 0;
+	}
+
 	extractGrid();
+
 	// Show the frame captured
-	imshow("capture", frame);
-	//if(waitKey(30) >= 0) break;
-	//}
-	imshow("final grid", finalImg);
-	waitKey(0);
+	//imshow("capture", frame);
+	//imshow("final grid", finalImg);
+	//waitKey(0);
 	destroyAllWindows();
+
 	return 0;
 }
+
 //-------------------------------------------------------------------------//
+
+
+//-------------------------------------------------------------------------//
+
 void extractGrid()
 {
 	Mat gray;
@@ -89,7 +117,7 @@ void extractGrid()
 	{
 		gray = finalImg;
 	}
-
+	
 	// Apply adaptiveThreshold at the bitwise_not of gray, notice the ~ symbol
 	Mat bw;
 	adaptiveThreshold(~gray, bw, 255, CV_ADAPTIVE_THRESH_MEAN_C, THRESH_BINARY, 15, -2);
@@ -100,7 +128,7 @@ void extractGrid()
 
 	int scale = 15; // play with this variable in order to increase/decrease the amount of lines to be detected
 
-					// Specify size on horizontal axis
+	// Specify size on horizontal axis
 	int horizontalsize = horizontal.cols / scale;
 
 	// Create structure element for extracting horizontal lines through morphology operations
@@ -112,7 +140,7 @@ void extractGrid()
 	//    dilate(horizontal, horizontal, horizontalStructure, Point(-1, -1)); // expand horizontal lines
 
 	// Show extracted horizontal lines
-	//imshow("horizontal", horizontal);
+	imshow("horizontal", horizontal);
 
 	// Specify size on vertical axis
 	int verticalsize = vertical.rows / scale;
@@ -123,7 +151,8 @@ void extractGrid()
 	// Apply morphology operations
 	erode(vertical, vertical, verticalStructure, Point(-1, -1));
 	dilate(vertical, vertical, verticalStructure, Point(-1, -1));
-	//    dilate(vertical, vertical, verticalStructure, Point(-1, -1)); // expand vertical lines
+
+	//dilate(vertical, vertical, verticalStructure, Point(-1, -1)); // expand vertical lines
 
 	vector<Vec4i> linesH;
 
@@ -158,14 +187,9 @@ void extractGrid()
 		if (swapped == false)
 			break;
 	}
-	for (int i = 0; i < contoursH.size(); i++)
-	{
-		drawContours(finalImg, contoursH, i, (255, 255, 255), 1);
-	}
 	
 	vector<vector<Point> > contoursV;
 	findContours(vertical, contoursV, CV_RETR_TREE, CV_CHAIN_APPROX_SIMPLE, Point(0, 0));
-
 	
 	/*sorting contours*/
 	n = contoursV.size();
@@ -190,29 +214,176 @@ void extractGrid()
 			break;
 	}
 
-	for (int i = 0; i < contoursV.size(); i++)
+	//------------Create Grid----------------------------------//
+	
+	int nLinhas = contoursV.size() - 1;
+	int nColunas = contoursV.size() - 1;
+	Mat crop;
+	int nTables = nColunas / 5; //cada tabela tem 5 colunas: numero | A | B | C | D | 
+	Mat temp;
+	Rect recAnswer;
+	int max = 0;
+	finalImg.copyTo(temp);
+	for (int t = 0; t < nTables; t++)//percorrer todas as tabelas
 	{
-		drawContours(finalImg, contoursV, i, (255, 255, 255), 1);
-		printf("\n, %u", contoursV[i].size());
-		printf("\n%u", contoursV[i][0].x);
-		printf("\n%u", contoursV[i][0].y);
+		int tableN = t * 5;
+		for (int l = 1; l < nLinhas; l++) //a primeira linha contem as opcoes de escolha, ignora-se
+		{
 
-		printf("\n%u", contoursV[i][1].x);
-		printf("\n%u", contoursV[i][1].y);
-		//waitKey();
+			int index = 0;
+			max = 0;
 
-		imshow("joints", finalImg);
+			int width = contoursV[tableN + 5][0].x - contoursV[tableN + 1][0].x;
+			int height = contoursH[l + 1][0].y - contoursH[l][0].y;
+
+			int sqaureWidth = width / 4;
+			for (int c = 1; c < 5; c++)
+			{
+				Rect rec = Rect(contoursV[tableN + c][0].x, contoursH[l][0].y,
+					sqaureWidth,
+					height);
+				crop = temp(rec);
+				threshold(crop, crop, 125, 255, THRESH_BINARY_INV);
+				double p = 0;
+
+				p = (double)countNonZero(crop);
+				p = p / (crop.size().width * crop.size().height);
+
+				if ( p>=max && p>=0.3) {
+					max = p;
+					index = c;
+					recAnswer = rec;
+				}
+				else {
+					index = -1;
+				}
+				
+			}
+			//crop image
+			printf("\nResposta %u: %c ", l + tableN, Option[index+1]);
+			if (index != 0)
+			{
+				rectangle(finalImg, recAnswer, (255, 255, 255));
+			}
+			imshow("SquaresTest", finalImg);
+		}
 	}
 
-
-	
 	waitKey();
-	imshow("joints", finalImg);
 }
 
 //-------------------------------------------------------------------------//
-void detectExam(Mat exam)
+
+bool detectExamManual(Mat exam)
 {
+	
+	imshow("Click 4 points - LT - RT - LB - RB", exam);
+	m = 0;
+	setMouseCallback("Click 4 points - LT - RT - LB - RB", onMouse);
+	int width;
+	int height;
+	waitKey();
+
+	if (m >= 4)
+	{
+		width = (src[1].x - src[0].x >= src[3].x - src[2].x) ? src[1].x - src[0].x : src[3].x - src[2].x;
+		height = (src[2].y - src[0].y >= src[3].y - src[1].y) ? src[2].y - src[0].y : src[3].y - src[1].y;
+
+		Point2f dst[4];
+		dst[0].x = 0; dst[0].y = 0;
+		dst[1].x = width; dst[1].y = 0;
+		dst[2].x = 0; dst[2].y = height;
+		dst[3].x = width; dst[3].y = height;
+
+ 		Mat result, perspective;
+		frame.copyTo(result);
+		perspective = getPerspectiveTransform(src, dst);
+		warpPerspective(exam, result, perspective, Size(width, height));
+
+		
+		imshow("Perspective", result);
+		waitKey();
+		result.copyTo(finalImg);
+		return true;
+	}
+	return false;
+	
+}
+
+
+//----------------------------------------------------------------------------//
+
+int MatchingMethod( Mat rect) {
+	/// Source image to display
+	Mat img_display;
+
+	Mat img;
+	Mat result;
+	rect.copyTo(img);
+	
+	/// Prepare the image for perspective
+		int width, height;
+		width = templateX.cols * 4 + 1;
+		height = templateX.rows + 1;
+		Point2f src[4];
+		src[0].x = 0; src[0].y = 0;
+		src[1].x = img.cols; src[1].y = 0;
+		src[2].x = 0; src[2].y = img.rows;
+		src[3].x = img.cols; src[3].y = img.rows;
+
+		Point2f dst2[4];
+		dst2[0].x = 0; dst2[0].y = 0;
+		dst2[1].x = width; dst2[1].y = 0;
+		dst2[2].x = 0; dst2[2].y = height;
+		dst2[3].x = width; dst2[3].y = height;
+
+		Mat resultP, perspective;
+		frame.copyTo(result);
+		perspective = getPerspectiveTransform(src, dst2);
+		warpPerspective(img, resultP, perspective, Size(width, height));
+		imshow("Perspective", resultP);
+		imshow("original", rect);
+		waitKey();
+
+		int result_cols = resultP.cols - templateX.cols + 1;
+		int result_rows = resultP.rows - templateX.rows + 1;
+
+	result.create(result_rows, result_cols, CV_32FC1);
+
+	/// Do the Matching and Normalize
+	int match_method = CV_TM_SQDIFF_NORMED;
+	matchTemplate(resultP, templateX, result, match_method);
+	normalize(result, result, 0, 1, NORM_MINMAX, -1, Mat());
+
+	/// Localizing the best match with minMaxLoc
+	double minVal; double maxVal; Point minLoc; Point maxLoc;
+	Point matchLoc;
+
+	minMaxLoc(result, &minVal, &maxVal, &minLoc, &maxLoc, Mat());
+
+	/// For SQDIFF and SQDIFF_NORMED, the best matches are lower values. For all the other methods, the higher the better
+	if (match_method == CV_TM_SQDIFF || match_method == CV_TM_SQDIFF_NORMED)
+	{
+		matchLoc = minLoc;
+	}
+	else
+	{
+		matchLoc = maxLoc;
+	}
+
+	/// Show me what you got
+	rectangle(resultP, matchLoc, Point(matchLoc.x + templateX.cols, matchLoc.y + templateX.rows), Scalar::all(0), 2, 8, 0);
+	rectangle(result, matchLoc, Point(matchLoc.x + templateX.cols, matchLoc.y + templateX.rows), Scalar::all(0), 2, 8, 0);
+
+	imshow("X", resultP);
+	imshow("result", result);
+
+	return matchLoc.x;
+}
+
+//-------------------------------------------------------------------------//
+
+void detectExamAuto(Mat exam) {
 	// Creating empty grid with same size of the "exam"
 	Mat grid = Mat(exam.size(), CV_8UC1);
 
@@ -287,7 +458,7 @@ void detectExam(Mat exam)
 
 	// Find lines in the grid using Hough Transform
 	vector<Vec2f> lines;
-	HoughLines(grid, lines, 1, CV_PI / 180, 221);
+	HoughLines(grid, lines, 1, CV_PI / 180, 270);
 
 	// Draw the lines obtained from the Hough transform in the grid
 	for (int i = 0; i < lines.size(); i++) {
@@ -510,6 +681,8 @@ void detectExam(Mat exam)
 	//destroyAllWindows();
 }
 
+//-------------------------------------------------------------------------//
+
 void drawLine(Vec2f line, Mat &image, Scalar rgb) {
 	if (line[1] != 0) {
 		float m = -1 / tan(line[1]);
@@ -522,6 +695,17 @@ void drawLine(Vec2f line, Mat &image, Scalar rgb) {
 	}
 }
 
+//-------------------------------------------------------------------------//
 
+void onMouse(int event, int x, int y, int, void* param) {
+	if (event == CV_EVENT_LBUTTONDOWN)
+	{
+		//Point2f * mp = (Point2f*)param;
+		src[m].x = x;
+		src[m].y = y;
+		m++;
 
+		printf("\n %d click on %u, %u ", m, x, y);
+	}
+}
 
