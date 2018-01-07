@@ -1,24 +1,12 @@
-/* 
-    Exam Correction - CV 2017/18
-
-    Cristiano Vagos - 65169
-    Miguel Brás - 49977
-*/
 
 
 // Visual Studio ONLY - Allowing for pre-compiled header files
+
 // This has to be the first #include
+
 // Remove it, if you are not using Windows and Visual Studio
 
 //#include "stdafx.h"
-
-
-
-// Visual Studio ONLY - Allowing for pre-compiled header files
-
-// This has to be the first #include
-
-// Remove it, if you are not using Windows and Visual Studio
 
 
 // The remaining #includes
@@ -44,39 +32,20 @@ using namespace cv;
 // using namespace cv;
 
 // using namespace std;
-struct myclass {
-	bool operator() (cv::Point pt1, cv::Point pt2) { return (pt1.y < pt2.y); }
-} myobject;
 //GLOBAL VARIABLES
 using namespace cv;
 using namespace std;
 Mat image;
 Mat finalImg;
-Mat templates[4];
-Mat frame;
-Point2f tempLoc[4];
 int m;
-
-void MatchingMethod(int i);
-void loadTemplates();
-void zoomOnGrid();
+Mat frame;
 void extractGrid();
 void detectExam(Mat exam);
 void drawLine(Vec2f line, Mat &image, Scalar rgb);
 
-void onMouse(int event, int x, int y, int flags, void* Coordinate) {
-	Point *p = (Point*)Coordinate;
-	if (event == EVENT_LBUTTONDOWN)
-	{
-		p->x = x;
-		p->y = y;
-		printf("Click");
-	}
-	m++;
-}
+
 
 int main(int argc, char** argv) {
-	loadTemplates();
 	// Open the default camera
 	//VideoCapture cap(0);
 
@@ -90,19 +59,13 @@ int main(int argc, char** argv) {
 	
 	//cap >> frame; // get a new frame from camera
 
-	frame = imread("test.jpg", 0);
+	frame = imread("exam.jpg", 0);
 
 	// Check if we have a frame
 	//if(frame.empty())
 	//    break;
-	for (int i = 0; i < 4; i++)
-	{
-		MatchingMethod(i);
-		waitKey();
-	}
-	//zoomOnGrid();
-	// Detect exam
-	//detectExam(finalImg);
+	
+	detectExam(frame);
 	extractGrid();
 	// Show the frame captured
 	imshow("capture", frame);
@@ -236,7 +199,7 @@ void extractGrid()
 
 		printf("\n%u", contoursV[i][1].x);
 		printf("\n%u", contoursV[i][1].y);
-		waitKey();
+		//waitKey();
 
 		imshow("joints", finalImg);
 	}
@@ -245,103 +208,6 @@ void extractGrid()
 	
 	waitKey();
 	imshow("joints", finalImg);
-}
-void MatchingMethod(int i)
-{
-	/// Source image to display
-	Mat templ;
-	Mat img_display;
-	Mat result;
-	frame.copyTo(img_display);
-	templates[i].copyTo(templ);
-
-	/// Create the result matrix
-	int result_cols = img_display.cols - templ.cols + 1;
-	int result_rows = img_display.rows - templ.rows + 1;
-
-	result.create(result_rows, result_cols, CV_32FC1);
-
-	/// Do the Matching and Normalize
-	int match_method = CV_TM_SQDIFF_NORMED;
-	matchTemplate(img_display, templ, result, match_method);
-	normalize(result, result, 0, 1, NORM_MINMAX, -1, Mat());
-
-	/// Localizing the best match with minMaxLoc
-	double minVal; double maxVal; Point minLoc; Point maxLoc;
-	Point matchLoc;
-
-	minMaxLoc(result, &minVal, &maxVal, &minLoc, &maxLoc, Mat());
-
-	/// For SQDIFF and SQDIFF_NORMED, the best matches are lower values. For all the other methods, the higher the better
-	if (match_method == CV_TM_SQDIFF || match_method == CV_TM_SQDIFF_NORMED)
-	{
-		matchLoc = minLoc;
-	}
-	else
-	{
-		matchLoc = maxLoc;
-	}
-
-	/// Show me what you got
-	rectangle(img_display, matchLoc, Point(matchLoc.x + templ.cols, matchLoc.y + templ.rows), Scalar::all(0), 2, 8, 0);
-	rectangle(result, matchLoc, Point(matchLoc.x + templ.cols, matchLoc.y + templ.rows), Scalar::all(0), 2, 8, 0);
-	tempLoc[i] = matchLoc;
-	imshow("Display", img_display);
-	imshow("Result", result);
-
-	return;
-}
-/*
-void zoomOnGrid()
-{
-
-	destroyAllWindows();
-	int width = (tempLoc[1].x - tempLoc[0].x >= tempLoc[3].x - tempLoc[2].x) ? tempLoc[1].x - tempLoc[0].x : tempLoc[3].x - tempLoc[2].x;
-	int height = (tempLoc[2].y - tempLoc[0].y >= tempLoc[3].y - tempLoc[1].y) ? tempLoc[2].y - tempLoc[0].y : tempLoc[3].y - tempLoc[1].y;
-
-	Point2f dst[4];
-	dst[0].x = 0; dst[0].y = 0;
-	dst[1].x = width; dst[1].y = 0;
-	dst[2].x = 0; dst[2].y = height;
-	dst[3].x = width; dst[3].y = height;
-	Mat result, perspective;
-	frame.copyTo(result);
-	perspective = getPerspectiveTransform(tempLoc, dst);
-	warpPerspective(frame, result, perspective, Size(width, height));
-	
-
-	imshow("Perspective", result);
-	m = 0;
-	Point2f dst2[4];
-	setMouseCallback("Perspective", onMouse, &dst2[m]);
-
-	waitKey();
-	if (m >= 4)
-	{
-		width = (dst2[1].x - dst2[0].x >= dst2[3].x - dst2[2].x) ? dst2[1].x - dst2[0].x : dst2[3].x - dst2[2].x;
-		height = (dst2[2].y - dst2[0].y >= dst2[3].y - dst2[1].y) ? dst2[2].y - dst2[0].y : dst2[3].y - dst2[1].y;
-
-		dst2[0].x = 0; dst2[0].y = 0;
-		dst2[1].x = width; dst2[1].y = 0;
-		dst2[2].x = 0; dst2[2].y = height;
-		dst2[3].x = width; dst2[3].y = height;
-
-		Rect rect = Rect(dst2[0].x, dst2[0].y, width, height);
-		Mat crop;
-		crop = result()
-		imshow("Original", frame);
-		imshow("Perspective", result);
-		waitKey();
-		result.copyTo(finalImg);
-	}
-}*/
-void loadTemplates()
-{
-	templates[0] = imread("template/cornerLT.jpg", 0);
-	templates[1] = imread("template/cornerRT.jpg", 0);
-	templates[2] = imread("template/cornerLB.jpg", 0);
-	templates[3] = imread("template/cornerRB.jpg",  0);
-	return;
 }
 
 //-------------------------------------------------------------------------//
@@ -421,7 +287,7 @@ void detectExam(Mat exam)
 
 	// Find lines in the grid using Hough Transform
 	vector<Vec2f> lines;
-	HoughLines(grid, lines, 1, CV_PI / 180, 270);
+	HoughLines(grid, lines, 1, CV_PI / 180, 221);
 
 	// Draw the lines obtained from the Hough transform in the grid
 	for (int i = 0; i < lines.size(); i++) {
@@ -655,6 +521,7 @@ void drawLine(Vec2f line, Mat &image, Scalar rgb) {
 		cv::line(image, Point(line[0], 0), Point(line[0], image.size().height), rgb);
 	}
 }
+
 
 
 
